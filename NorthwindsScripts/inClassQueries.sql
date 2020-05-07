@@ -1,0 +1,179 @@
+-- SELECT distinct country FROM northwindsDB.nwCustomers;
+
+-- query gets you the current time
+SELECT Now(); 
+-- query gets you the current date
+SELECT CurDate(); 
+SELECT Curtime(); 
+
+-- how to extract date elements 
+SELECT Lastname, Firstname, Extract(Year From HireDate) AS HireYear From 
+northwindsDB.nwEmployees;
+
+-- date diff gives difference in time between specified 
+SELECT EmployeeID, LastName, FirstName,
+ROUND(DATEDIFF(HireDate,BirthDate)/365.0)
+AS HIRE_AGE
+FROM nwEmployees;
+
+-- this query will spit out all the employees along with their birth month as the next column 
+SELECT Lastname, Firstname, Date_Format(BirthDate, '%M')
+FROM nwEmployees;
+
+
+-- Below are examples of group functions
+SELECT COUNT(*) AS 'Total' FROM nwEmployees;
+
+SELECT COUNT(Distinct Country) AS 'Count of Countries' 
+FROM nwCustomers; 
+
+SELECT SUM(UnitPrice) as 'Total Price of everything' 
+FROM nwProducts; 
+
+SELECT MAX(UnitPrice) as 'Highest priced item' 
+FROM nwProducts;
+
+SELECT MIN(UnitPrice) as 'Lowest priced item' 
+FROM nwProducts; 
+
+-- making a query that selects the name of a product of the lowest price
+SELECT productname AS 'PRODUCT', unitprice AS 'PRICE' FROM nwProducts WHERE unitprice = (SELECT MIN(unitprice) FROM nwProducts);
+
+
+-- Groupby Query
+-- a GOOD example of using a group by function 
+-- This query is giving you the product name and the all the sum of its unit price and grouping them by the productID
+SELECT productname AS 'Product Name', SUM(unitprice) AS 'Total Price'  FROM nwOrderDetails
+GROUP BY productID;
+
+
+-- this is an example of a BAD query , this is bad because the order id column becomes meaningless 
+SELECT OrderID, ProductID, SUM(unitprice) as 'Total Price'
+FROM nwOrderDetails
+GROUP BY productID; 
+
+
+-- make sure you don't have irrelavent columns
+SELECT OrderID, SUM(unitprice) , SUM(quantity) 
+FROM nwOrderDetails
+GROUP BY OrderID;
+
+	select @@sql_mode;
+    -- strict mode 
+    SET sql_mode = 'ONLY_FULL_GROUP_BY' ;
+    -- loose mode 
+    SET sql_mode = '';
+    
+    
+-- From which supplier does northwinds carry the most inventory ? 
+SELECT SupplierID, SUM(UnitsInStock) AS 'Inventory' 
+FROM nwProducts 
+GROUP BY SupplierID
+ORDER BY SUM(UnitsInStock) DESC; 
+
+-- In which month in 2014 did northiwnds ship the most orders? 
+SELECT EXTRACT(MONTH FROM shippeddate) AS 'ShippedMonth', 
+	COUNT(OrderID) AS 'Orders'
+    FROM northwindsDB.nwOrders
+    WHERE EXTRACT(YEAR FROM ShippedDate) = '2014' 
+    GROUP BY ShippedMonth
+    Order BY 2 DESC;
+    
+
+SELECT Country, COUNT(*) AS 'TotalCusomters' 
+FROM nwCustomers
+GROUP BY Country  -- so far this query is giivng you the count of all customers that are in each country 
+HAVING TotalCusomters > 5 -- this just told the machine to only grab the ones who's total count is greater than 5
+ORDER BY 2 desc; 
+
+
+-- The following are subquery examples 
+SELECT ProductID AS 'ProductID', ProductName AS 'Product Name', UnitPrice AS 'Unit Price'
+FROM nwProducts
+WHERE UnitPrice = (
+	SELECT MAX(UnitPrice)  FROM nwProducts ) ;
+    
+    
+SELECT CustomerID, OrderID
+FROM nwOrders
+WHERE OrderID in (
+	SELECT OrderID 
+    FROM nwOrderDetails 
+    WHERE Quantity > 100
+    );
+
+-- creating alist of all order than fewer than a 100 items sold 
+SELECT OrderID
+	FROM (SELECT OrderId, COUNT(quantity) 
+		FROM nwOrderDetails
+        GROUP BY OrderID
+        HAVING COUNT(quantity) < 100) AS DetailCount;
+        
+        
+-- Example of a co-related subquery, select all the employees wher the employee's home city is equal to their orders' ship city 
+SELECT OrderId, ShipCity, CustomerId, O.EmployeeID
+FROM nwOrders O 
+WHERE EmployeeID IN (SELECT EmployeeID FROM nwEmployees E
+WHERE E.City = O.ShipCity); 
+
+
+-- providing a listing showing Northwinds employees and a count of each employee's orders sorted from hiighest to lowest 
+SELECT LastName, FirstName, count(OrderID) as 'Orders'
+FROM nwEmployees, nwOrders
+WHERE nwEmployees.EmployeeID = nwOrders.EmployeeID 
+GROUP BY LastName, FirstName
+Order By 3 DESC; 
+
+-- two different forms of syntax 
+SELECT LastName, FirstName, COUNT(OrderID) as 'Orders' 
+	FROM nwEmployees E , nwOrders O 
+    WHERE E.EmployeeID = O.EmployeeID 
+    GROUP BY LastName, FirstName
+    Order By 1;
+    
+SELECT LastName, Firstname, COUNT(OrderID) AS 'Orders'
+	FROM nwEmployees E JOIN nwOrders O 
+    ON E.EmployeeID = O.EmployeeID
+    GROUP BY LastName, FirstName
+    Order By 1;
+    
+-- example query of joining three tables
+-- Create a report showing each employee and the total value of their orderes
+-- sorted from highest value to lowest. (Order Value = UnitPrice * Quantity for each item on the order ) 
+
+SELECT LastName, FirstName, 
+	SUM(UnitPrice * Quantity) AS 'Order Value' 
+    FROM nwEmployees E
+    JOIN nwOrders O on E.EmployeeID = O.EmployeeID
+    JOIN nwOrderDetails D on O.OrderId = D.OrderID
+    GROUP BY LastName, FirstName
+    ORDER BY 3 DESC; 
+    
+-- multi table query 
+SELECT LastName, FirstName, 
+FORMAT(SUM(Unitprice*Quantity),',') AS 'Order Value' 
+FROM nwEmployees E, 
+nwOrders O, nwOrderDetails D
+WHERE E.EmployeeID = O.EmployeeID
+GROUP BY LastName, FirstName
+Order By 3 DESC; 
+
+-- union example 
+SELECT C.customerID, CompanyName, COUNT(OrderID)
+FROM nwOrders O JOIN nwCustomers C 
+ON O.customerID = C.customerID 
+GROUP BY C.customerID, CompanyName 
+UNION 
+SELECT 'Total' , 'Total' , COUNT(orderID) 
+FROM nwOrders O JOIN nwcustomers C 
+ON O.customerID = C.customerID; 
+
+-- outer join
+SELECT DISTINCT O.customerID, CompanyName, COUNT(orderID) 
+FROM nwOrders O LEFT OUTER JOIN nwCustomers C 
+ON O.customerID =  C.customerID
+GROUP BY O.customerID, CompanyName
+UNION 
+SELECT 'Total' , 'Total', COUNT(orderID) 
+FROM nwOrders O LEFT OUTER JOIN nwCustomers C 
+ON O.customerID = C.customerID; 
